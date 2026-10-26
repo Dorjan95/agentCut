@@ -48,40 +48,71 @@ public struct ProcessRunner: LineRunning {
             }
 
             let stdinHandle = stdinPipe.fileHandleForWriting
+            // Se il figlio esce prima di leggere stdin, la write deve fallire con EPIPE invece di uccidere l'app.
+            _ = fcntl(stdinHandle.fileDescriptor, F_SETNOSIGPIPE, 1)
             let input = Data(stdin.utf8)
             DispatchQueue.global().async {
                 try? stdinHandle.write(contentsOf: input)
                 try? stdinHandle.close()
             }
 
-            let stderrTask = Task.detached {
-                stderrPipe.fileHandleForReading.readDataToEndOfFile()
-            }
-
-            let timeoutTask = Task.detached {
-                try await Task.sleep(for: timeout)
-                run.markTimedOut()
-            }
-
-            let readTask = Task.detached {
-                do {
-                    for try await line in stdoutPipe.fileHandleForReading.bytes.lines {
-                        continuation.yield(line)
-                    }
-                } catch {
-                    // EOF anomalo: l'esito lo decide il codice di uscita.
+            // stderr letto in modo non bloccante: un nipote che eredita la pipe non deve bloccare nulla.
+            stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                if data.isEmpty {
+                    handle.readabilityHandler = nil
+                } else {
+                    run.appendStderr(data)
                 }
+            }
+
+            // Timeout di inattività: si azzera a ogni riga ricevuta.
+            let timeoutTask = Task.detached {
+                while true {
+                    let idle = run.idleTime
+                    if idle >= timeout {
+                        run.markTimedOut()
+                        continuation.finish(throwing: AgentError.timedOut)
+                        return
+                    }
+                    try await Task.sleep(for: timeout - idle)
+                }
+            }
+
+            // Ogni pipe ha il suo handler: FileHandle.bytes usa una coda condivisa e un lettore bloccato fermerebbe gli altri.
+            stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                if data.isEmpty {
+                    handle.readabilityHandler = nil
+                    for line in run.flushStdout() { continuation.yield(line) }
+                    run.markReadDone()
+                    return
+                }
+                let lines = run.appendStdout(data)
+                if !lines.isEmpty { run.touch() }
+                for line in lines { continuation.yield(line) }
+            }
+
+            // L'esito si decide all'uscita del processo; l'EOF di stdout si aspetta al massimo 500 ms.
+            Task.detached {
                 var status: Int32 = 0
                 for await code in exitStream { status = code }
                 timeoutTask.cancel()
-                let stderrData = await stderrTask.value
+                for _ in 0..<50 where !run.readDone {
+                    try? await Task.sleep(for: .milliseconds(10))
+                }
+                if !run.readDone {
+                    stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                    for line in run.flushStdout() { continuation.yield(line) }
+                }
+                stderrPipe.fileHandleForReading.readabilityHandler = nil
 
                 if run.timedOut {
                     continuation.finish(throwing: AgentError.timedOut)
                 } else if run.cancelled {
                     continuation.finish()
                 } else if status != 0 {
-                    let stderr = String(decoding: stderrData, as: UTF8.self)
+                    let stderr = String(decoding: run.stderr, as: UTF8.self)
                     continuation.finish(throwing: AgentError.processFailed(exitCode: status, stderr: stderr))
                 } else {
                     continuation.finish()
@@ -91,7 +122,6 @@ public struct ProcessRunner: LineRunning {
             continuation.onTermination = { reason in
                 if case .cancelled = reason {
                     run.cancel()
-                    readTask.cancel()
                 }
             }
         }
@@ -103,12 +133,57 @@ private final class RunState: @unchecked Sendable {
     private let process: Process
     private var _timedOut = false
     private var _cancelled = false
+    private var lastActivity = ContinuousClock.now
+    private var _readDone = false
+    private var stderrData = Data()
+    private var stdoutBuffer = Data()
 
     init(process: Process) {
         self.process = process
     }
 
     var timedOut: Bool { lock.withLock { _timedOut } }
+    var idleTime: Duration { lock.withLock { ContinuousClock.now - lastActivity } }
+
+    var readDone: Bool { lock.withLock { _readDone } }
+    var stderr: Data { lock.withLock { stderrData } }
+
+    func markReadDone() {
+        lock.withLock { _readDone = true }
+    }
+
+    /// Aggiunge dati a stdout e restituisce le righe complete (separate solo da "\n").
+    func appendStdout(_ data: Data) -> [String] {
+        lock.withLock {
+            stdoutBuffer.append(data)
+            var lines: [String] = []
+            while let newline = stdoutBuffer.firstIndex(of: UInt8(ascii: "\n")) {
+                var lineData = stdoutBuffer[stdoutBuffer.startIndex..<newline]
+                if lineData.last == UInt8(ascii: "\r") { lineData = lineData.dropLast() }
+                lines.append(String(decoding: lineData, as: UTF8.self))
+                stdoutBuffer = Data(stdoutBuffer[stdoutBuffer.index(after: newline)...])
+            }
+            return lines
+        }
+    }
+
+    /// Restituisce l'ultima riga senza "\n" finale, se c'è.
+    func flushStdout() -> [String] {
+        lock.withLock {
+            guard !stdoutBuffer.isEmpty else { return [] }
+            let line = String(decoding: stdoutBuffer, as: UTF8.self)
+            stdoutBuffer = Data()
+            return [line]
+        }
+    }
+
+    func appendStderr(_ data: Data) {
+        lock.withLock { stderrData.append(data) }
+    }
+
+    func touch() {
+        lock.withLock { lastActivity = .now }
+    }
     var cancelled: Bool { lock.withLock { _cancelled } }
 
     func markTimedOut() {
@@ -121,7 +196,13 @@ private final class RunState: @unchecked Sendable {
         terminate()
     }
 
+    /// SIGTERM, poi SIGKILL dopo 2 s se il processo è ancora vivo.
     private func terminate() {
-        if process.isRunning { process.terminate() }
+        guard process.isRunning else { return }
+        process.terminate()
+        let pid = process.processIdentifier
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [process] in
+            if process.isRunning { kill(pid, SIGKILL) }
+        }
     }
 }
