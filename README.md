@@ -35,7 +35,7 @@ agentCut chiede il permesso **Accessibilità** (Impostazioni di Sistema → Priv
 ## Uso
 
 - **⌃⌥Space** (Ctrl+Option+Spazio) su un testo selezionato apre il fumetto. Se non c'è selezione, usa il testo negli appunti e ne mostra un'anteprima.
-- **⏎** esegue l'azione principale: *Sostituisci* quando la risposta è un testo corretto, *Copia* quando è una spiegazione.
+- **⏎** esegue l'azione principale: *Sostituisci* quando la risposta è un testo corretto, *Copia* quando è una spiegazione. **⌘⇧C** copia sempre tutta la risposta, mentre ⌘C copia solo la parte che hai selezionato nel fumetto.
 - **Chiedi altro…** permette di scrivere una domanda su quel testo.
 - **Esc** chiude il fumetto e interrompe la richiesta.
 - **Tasto destro → Servizi → Chiedi ad agentCut** fa la stessa cosa dal menu contestuale. Se la voce non c'è, abilitala in Impostazioni di Sistema → Tastiera → Scorciatoie da tastiera → Servizi → Testo.
@@ -46,4 +46,6 @@ Dalla barra dei menu → **Impostazioni…** puoi scegliere l'agente predefinito
 
 - Tempo di risposta: circa 6 s con Claude e circa 8 s con Codex, dovuti soprattutto all'avvio della CLI. Claude mostra la risposta mentre la scrive, Codex la mostra tutta alla fine.
 - Codex gira con sandbox in sola lettura: non può modificare nulla, ma la CLI non permette di disattivare del tutto i suoi strumenti.
+- Se l'app in primo piano dice di non avere testo selezionato, agentCut usa gli appunti senza provare ⌘C: il fumetto lo segnala con "Dagli appunti: …".
+- Le CLI vengono lanciate senza le tue impostazioni personali di Claude Code (`--setting-sources ""`): niente hook né plugin, così è più veloce.
 - La voce nel menu Servizi può richiedere un logout/login la prima volta prima di comparire.

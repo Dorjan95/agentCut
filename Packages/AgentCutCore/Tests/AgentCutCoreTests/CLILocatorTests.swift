@@ -37,4 +37,13 @@ struct CLILocatorTests {
             "/Users/u/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", "/Users/u/.npm-global/bin", "/Users/u/.bun/bin",
         ])
     }
+
+    @Test func loginShellOutputIgnoresNoise() {
+        let output = "Last login: oggi\n\u{1B}]7;file://x\u{07}__AGENTCUT_PATH__/Users/u/.nvm/versions/node/v20/bin:/usr/bin__END__\nbye"
+        #expect(LoginShellPath.parse(output).map(\.path) == ["/Users/u/.nvm/versions/node/v20/bin", "/usr/bin"])
+    }
+
+    @Test func loginShellOutputWithoutMarkerIsEmpty() {
+        #expect(LoginShellPath.parse("/usr/bin:/bin").isEmpty)
+    }
 }

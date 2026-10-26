@@ -33,4 +33,16 @@ struct BubblePlacementTests {
         #expect(f.minY >= screen.minY)
         #expect(f.maxY <= screen.maxY)
     }
+
+    @Test func belowKeepsTopEdgeFixed() {
+        let anchor = CGRect(x: 100, y: 500, width: 200, height: 20)
+        let f = BubblePlacement.frame(size: size, anchor: anchor, mouse: .zero, visibleFrame: screen)
+        #expect(BubblePlacement.fixedEdge(frame: f, anchor: anchor, mouse: .zero) == .top)
+    }
+
+    @Test func aboveKeepsBottomEdgeFixed() {
+        let anchor = CGRect(x: 100, y: 100, width: 200, height: 20)
+        let f = BubblePlacement.frame(size: size, anchor: anchor, mouse: .zero, visibleFrame: screen)
+        #expect(BubblePlacement.fixedEdge(frame: f, anchor: anchor, mouse: .zero) == .bottom)
+    }
 }

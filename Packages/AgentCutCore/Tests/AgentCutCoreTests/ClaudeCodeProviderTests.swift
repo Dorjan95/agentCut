@@ -17,6 +17,9 @@ struct ClaudeCodeProviderTests {
         let sys = try! #require(args.firstIndex(of: "--system-prompt"))
         #expect(args[sys + 1] == "SYS")
         #expect(args.contains("--strict-mcp-config"))
+        // Niente impostazioni, hook e plugin dell'utente: più veloce e nessun effetto collaterale.
+        let sources = try! #require(args.firstIndex(of: "--setting-sources"))
+        #expect(args[sources + 1] == "")
         #expect(args.contains("--no-session-persistence"))
         let model = try! #require(args.firstIndex(of: "--model"))
         #expect(args[model + 1] == "haiku")

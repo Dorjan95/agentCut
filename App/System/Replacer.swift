@@ -11,9 +11,17 @@ enum Replacer {
         pasteboard.setString(text, forType: .string)
 
         app?.activate()
-        try? await Task.sleep(for: .milliseconds(80))
+        // Aspetta (max 500 ms) che l'app d'origine sia davvero in primo piano, poi un margine per il focus.
+        if let app {
+            for _ in 0..<50 where NSWorkspace.shared.frontmostApplication != app {
+                try? await Task.sleep(for: .milliseconds(10))
+            }
+        }
+        try? await Task.sleep(for: .milliseconds(150))
+        await KeySynth.waitForModifiersReleased()
         KeySynth.paste()
-        try? await Task.sleep(for: .milliseconds(300))
+        // Le app lente leggono gli appunti in ritardo: ripristino dopo 500 ms.
+        try? await Task.sleep(for: .milliseconds(500))
         snapshot.restore(to: pasteboard)
     }
 }

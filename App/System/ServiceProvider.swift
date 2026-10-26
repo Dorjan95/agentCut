@@ -11,7 +11,10 @@ final class ServiceProvider: NSObject {
                 anchor: nil,
                 sourceApp: NSWorkspace.shared.frontmostApplication
             )
-            AppCoordinator.shared.trigger(with: capture)
+            Task {
+                await AppCoordinator.shared.waitUntilReady()
+                AppCoordinator.shared.trigger(with: capture)
+            }
         }
     }
 }

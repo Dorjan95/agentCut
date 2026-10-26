@@ -37,22 +37,36 @@ public struct CLILocator: Sendable {
 }
 
 public enum LoginShellPath {
-    /// Directory della PATH della shell di login dell'utente (timeout 2 s).
+    static let startMarker = "__AGENTCUT_PATH__"
+    static let endMarker = "__END__"
+
+    /// Directory della PATH della shell dell'utente, letta in modalità login + interattiva
+    /// (così include anche ciò che aggiunge `.zshrc`, ad esempio nvm). Timeout 3 s.
     public static func directories() async -> [URL] {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let stream = ProcessRunner().lines(
             executable: URL(fileURLWithPath: shell),
-            arguments: ["-l", "-c", "printf %s \"$PATH\""],
+            arguments: ["-l", "-i", "-c", "printf '\(startMarker)%s\(endMarker)' \"$PATH\""],
             stdin: "",
             workingDirectory: FileManager.default.temporaryDirectory,
-            timeout: .seconds(2)
+            timeout: .seconds(3)
         )
         var output = ""
         do {
-            for try await line in stream { output += line }
+            for try await line in stream { output += line + "\n" }
         } catch {
-            return []
+            // Anche se la shell esce con errore, la PATH potrebbe essere già stata stampata.
         }
-        return output.split(separator: ":").map { URL(fileURLWithPath: String($0)) }
+        return parse(output)
+    }
+
+    /// Estrae la PATH tra i marcatori, ignorando ciò che la shell interattiva stampa intorno.
+    static func parse(_ output: String) -> [URL] {
+        guard let start = output.range(of: startMarker),
+              let end = output.range(of: endMarker, range: start.upperBound..<output.endIndex)
+        else { return [] }
+        return output[start.upperBound..<end.lowerBound]
+            .split(separator: ":")
+            .map { URL(fileURLWithPath: String($0)) }
     }
 }

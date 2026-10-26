@@ -20,7 +20,7 @@ public struct ClaudeCodeProvider: AgentProvider {
     public static func arguments(for request: AgentRequest) -> [String] {
         var args = [
             "-p", "--output-format", "stream-json", "--include-partial-messages", "--verbose",
-            "--tools", "", "--strict-mcp-config", "--no-session-persistence",
+            "--tools", "", "--strict-mcp-config", "--no-session-persistence", "--setting-sources", "",
             "--system-prompt", request.systemPrompt,
         ]
         if let model = request.model { args += ["--model", model] }

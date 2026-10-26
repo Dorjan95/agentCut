@@ -72,7 +72,7 @@ struct BubbleView: View {
                         .buttonStyle(.borderedProminent)
                 } else {
                     Button("Copia") { onCopy(response.body) }
-                        .keyboardShortcut("c", modifiers: .command)
+                        .keyboardShortcut("c", modifiers: [.command, .shift])
                         .disabled(!finished)
                 }
                 Button("Chiedi altro…") { model.showQuestionField() }

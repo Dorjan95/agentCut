@@ -14,10 +14,13 @@ enum SelectionReader {
     static func capture() async -> Capture {
         let sourceApp = NSWorkspace.shared.frontmostApplication
 
-        if let (text, anchor) = readViaAccessibility(), !text.isEmpty {
-            return Capture(input: .init(text: text, source: .selection), anchor: anchor, sourceApp: sourceApp)
-        }
-        if let text = await readViaSyntheticCopy(), !text.isEmpty {
+        if let (text, anchor) = readViaAccessibility() {
+            if !text.isEmpty {
+                return Capture(input: .init(text: text, source: .selection), anchor: anchor, sourceApp: sourceApp)
+            }
+            // L'app espone la selezione ed è vuota: niente ⌘C sintetico, che in alcuni editor
+            // copierebbe la riga corrente spacciandola per selezione. Si usano gli appunti.
+        } else if let text = await readViaSyntheticCopy(), !text.isEmpty {
             return Capture(input: .init(text: text, source: .selection), anchor: nil, sourceApp: sourceApp)
         }
         let clipboard = NSPasteboard.general.string(forType: .string) ?? ""
