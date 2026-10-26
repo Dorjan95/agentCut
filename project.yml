@@ -1,0 +1,33 @@
+name: agentCut
+options:
+  bundleIdPrefix: com.dorjanrudaj
+  deploymentTarget:
+    macOS: "14.0"
+packages:
+  AgentCutCore:
+    path: Packages/AgentCutCore
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: 2.0.0
+targets:
+  agentCut:
+    type: application
+    platform: macOS
+    sources:
+      - App
+    dependencies:
+      - package: AgentCutCore
+      - package: KeyboardShortcuts
+    settings:
+      base:
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/agentCut.entitlements
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Developer ID Application"
+        DEVELOPMENT_TEAM: S4H5J5QWU7
+        ENABLE_HARDENED_RUNTIME: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.dorjanrudaj.agentcut
+        PRODUCT_NAME: agentCut
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        GENERATE_INFOPLIST_FILE: NO
