@@ -137,4 +137,13 @@ struct BubbleViewModelTests {
         let vm = BubbleViewModel(input: selection, settings: AppSettings(), provider: .failure(.timedOut))
         #expect(vm.inputPreview == nil)
     }
+
+    @Test func previewIsCheapForHugeClipboard() {
+        // Letta a ogni render (una volta per frammento): non deve rielaborare tutto l'input.
+        let huge = String(repeating: "riga di log abbastanza lunga\n", count: 70_000)
+        let vm = BubbleViewModel(input: .init(text: huge, source: .clipboard), settings: AppSettings(), provider: .failure(.timedOut))
+        let start = ContinuousClock.now
+        for _ in 0..<100 { _ = vm.inputPreview }
+        #expect(ContinuousClock.now - start < .milliseconds(50))
+    }
 }

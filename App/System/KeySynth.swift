@@ -8,8 +8,18 @@ enum KeySynth {
     static func copy() { press(keyC) }
     static func paste() { press(keyV) }
 
+    /// Aspetta (max 300 ms) che l'utente rilasci ⌃⌥⇧⌘ della scorciatoia, così l'app non riceve ⌃⌥⌘C.
+    static func waitForModifiersReleased() async {
+        let held: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate, .maskShift]
+        for _ in 0..<30 {
+            if CGEventSource.flagsState(.combinedSessionState).intersection(held).isEmpty { return }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     private static func press(_ key: CGKeyCode) {
-        let source = CGEventSource(stateID: .combinedSessionState)
+        // Stato privato: i modificatori fisici ancora premuti non si sommano al ⌘ sintetico.
+        let source = CGEventSource(stateID: .privateState)
         let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true)
         let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false)
         down?.flags = .maskCommand

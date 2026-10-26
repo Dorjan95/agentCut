@@ -28,14 +28,18 @@ public final class BubbleViewModel {
         self.input = input
         self.settings = settings
         self.provider = provider
+        self.inputPreview = Self.preview(of: input)
     }
 
-    /// Anteprima di cosa è stato inviato, solo quando il testo arriva dagli appunti.
-    public var inputPreview: String? {
+    private static func preview(of input: CapturedText) -> String? {
         guard input.source == .clipboard else { return nil }
-        let lines = input.text.split(separator: "\n", omittingEmptySubsequences: false).prefix(3).joined(separator: "\n")
+        let head = input.text.prefix(500)
+        let lines = head.split(separator: "\n", omittingEmptySubsequences: false).prefix(3).joined(separator: "\n")
         return lines.count > 160 ? String(lines.prefix(160)) + "…" : lines
     }
+
+    /// Anteprima di cosa è stato inviato, solo quando il testo arriva dagli appunti. Calcolata una volta.
+    public let inputPreview: String?
 
     public var primaryAction: BubbleAction? {
         guard case .done(let response) = state else { return nil }

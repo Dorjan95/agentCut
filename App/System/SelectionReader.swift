@@ -26,6 +26,8 @@ enum SelectionReader {
 
     private static func readViaAccessibility() -> (String, CGRect?)? {
         let system = AXUIElementCreateSystemWide()
+        // Un'app bloccata non deve congelare agentCut per i 6 s del timeout AX predefinito.
+        AXUIElementSetMessagingTimeout(system, 0.3)
         guard let focused: AXUIElement = attribute(system, kAXFocusedUIElementAttribute),
               let text: String = attribute(focused, kAXSelectedTextAttribute)
         else { return nil }
@@ -57,22 +59,28 @@ enum SelectionReader {
 
     /// Fallback per le app che non espongono la selezione via AX (browser, Electron, terminali).
     private static func readViaSyntheticCopy() async -> String? {
+        await KeySynth.waitForModifiersReleased()
         let pasteboard = NSPasteboard.general
         let snapshot = PasteboardSnapshot(capturing: pasteboard)
         let before = pasteboard.changeCount
         KeySynth.copy()
 
-        var copied: String?
-        for _ in 0..<15 {
+        // Browser ed Electron sotto carico possono metterci centinaia di ms.
+        for _ in 0..<40 {
             try? await Task.sleep(for: .milliseconds(10))
             if pasteboard.changeCount != before {
-                copied = pasteboard.string(forType: .string)
-                break
+                let copied = pasteboard.string(forType: .string)
+                snapshot.restore(to: pasteboard)
+                return copied
             }
         }
-        if pasteboard.changeCount != before {
-            snapshot.restore(to: pasteboard)
+        // Copia arrivata in ritardo: ripristina comunque gli appunti dell'utente.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            if pasteboard.changeCount == before + 1 {
+                snapshot.restore(to: pasteboard)
+            }
         }
-        return copied
+        return nil
     }
 }

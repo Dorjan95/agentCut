@@ -12,6 +12,7 @@ final class AppCoordinator {
     private var extraPath: [URL] = []
     private var panel: BubblePanel?
     private var model: BubbleViewModel?
+    private var isCapturing = false
 
     var onOpenSettings: () -> Void = {}
     var onNeedsOnboarding: () -> Void = {}
@@ -37,11 +38,16 @@ final class AppCoordinator {
             closeBubble()
             return
         }
+        guard !isCapturing else { return }
         guard Accessibility.isTrusted else {
             onNeedsOnboarding()
             return
         }
-        trigger(with: await SelectionReader.capture())
+        // Una seconda pressione durante la lettura farebbe un secondo snapshot sporco degli appunti.
+        isCapturing = true
+        let capture = await SelectionReader.capture()
+        isCapturing = false
+        trigger(with: capture)
     }
 
     func trigger(with capture: Capture) {
