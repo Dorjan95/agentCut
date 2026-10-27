@@ -7,6 +7,15 @@ public enum AgentEnvironment {
             .appendingPathComponent("agentCut/work", isDirectory: true)
     }
 
+    /// Il comando Claude da tenere pronto con le impostazioni attuali; `nil` se l'agente non lo supporta.
+    public static func prewarmTarget(settings: AppSettings, locator: CLILocator) -> (executable: URL, arguments: [String])? {
+        guard settings.agent == .claudeCode,
+              let executable = locator.locate(AgentKind.claudeCode.executableName, override: settings.claudePathOverride)
+        else { return nil }
+        let request = PromptBuilder.build(input: "", question: nil, agent: .claudeCode, settings: settings)
+        return (executable, ClaudeCodeProvider.arguments(for: request))
+    }
+
     public static func makeProvider(settings: AppSettings, locator: CLILocator, runner: LineRunning) -> Result<AgentProvider, AgentError> {
         let agent = settings.agent
         guard let executable = locator.locate(agent.executableName, override: settings.pathOverride(for: agent)) else {

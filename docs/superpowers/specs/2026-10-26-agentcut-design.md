@@ -103,6 +103,8 @@ Note:
 2. mostrare subito il fumetto con lo stato di caricamento, così il gesto dà un riscontro immediato;
 3. valutare, con una misura, se tenere un processo `claude` "caldo" (modalità `--input-format stream-json` di lunga durata) riduce in modo significativo il tempo al primo token, e a quale prezzo (contesto che si accumula, gestione del riavvio). È un'ottimizzazione da verificare, non un requisito.
 
+**Esito della misura (2026-10-27):** si usa un processo `claude` pre-avviato e monouso (`--input-format stream-json`). Resta in attesa su stdin, riceve una sola richiesta e viene rimpiazzato a risposta finita; se resta fermo per 30 minuti viene sostituito. In più la risposta si considera completa al `message_stop`, perché dopo la CLI spende circa 2,5 s in un riepilogo interno. Risultato con haiku: primo testo in circa 1,1 s e risposta completa in circa 1,7 s, contro gli 8 s precedenti. Il costo è un processo inattivo di circa 250 MB.
+
 ### 7.2 Prompt
 Ogni richiesta è composta da:
 1. un prompt di sistema fisso dell'app: "riconosci il tipo di testo e il problema, rispondi con la soluzione pronta da incollare, più etichetta e spiegazione breve, in formato strutturato";

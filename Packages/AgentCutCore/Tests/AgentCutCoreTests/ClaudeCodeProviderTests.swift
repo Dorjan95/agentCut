@@ -12,6 +12,8 @@ struct ClaudeCodeProviderTests {
     @Test func claudeArgumentsIncludeModelAndNoTools() {
         let args = ClaudeCodeProvider.arguments(for: request)
         #expect(Array(args.prefix(5)) == ["-p", "--output-format", "stream-json", "--include-partial-messages", "--verbose"])
+        let input = try! #require(args.firstIndex(of: "--input-format"))
+        #expect(args[input + 1] == "stream-json")
         let tools = try! #require(args.firstIndex(of: "--tools"))
         #expect(args[tools + 1] == "")
         let sys = try! #require(args.firstIndex(of: "--system-prompt"))
@@ -40,7 +42,23 @@ struct ClaudeCodeProviderTests {
         let runner = FakeRunner(lines: [delta("KIND"), delta(": answer"), #"{"type":"result","is_error":false,"result":"KIND: answer"}"#])
         let provider = ClaudeCodeProvider(executable: fakeURL, workingDirectory: fakeWorkDir, runner: runner)
         #expect(try await collect(provider.stream(request)) == ["KIND", ": answer"])
-        #expect(runner.lastStdin == "USER")
+        let message = try #require(jsonObject(runner.lastStdin.trimmingCharacters(in: .newlines)))
+        #expect(message["type"] as? String == "user")
+        let content = (message["message"] as? [String: Any])?["content"] as? String
+        #expect(content == "USER")
+        #expect(runner.lastStdin.hasSuffix("\n"))
+    }
+
+    @Test func claudeStopsAtMessageStop() async throws {
+        // Dopo message_stop la CLI perde secondi in un riepilogo interno: la risposta è già completa.
+        let runner = FakeRunner(lines: [
+            delta("ok"),
+            #"{"type":"stream_event","event":{"type":"message_stop"}}"#,
+            delta("dopo"),
+            #"{"type":"result","is_error":true,"result":"ignorato"}"#,
+        ])
+        let provider = ClaudeCodeProvider(executable: fakeURL, workingDirectory: fakeWorkDir, runner: runner)
+        #expect(try await collect(provider.stream(request)) == ["ok"])
     }
 
     @Test func claudeNotLoggedInMapsToNotAuthenticated() async {
@@ -90,6 +108,19 @@ struct ClaudeCodeProviderTests {
         let result = AgentEnvironment.makeProvider(settings: settings, locator: locator, runner: FakeRunner(lines: []))
         guard case .failure(let error) = result else { Issue.record("expected failure"); return }
         #expect(error == .cliNotFound(.codex))
+    }
+
+    @Test func prewarmTargetOnlyForClaude() throws {
+        let locator = CLILocator(searchDirectories: [URL(fileURLWithPath: "/x")], isExecutable: { _ in true })
+        var settings = AppSettings()
+        settings.userSystemPrompt = "PERSONALE"
+        let target = try #require(AgentEnvironment.prewarmTarget(settings: settings, locator: locator))
+        #expect(target.executable.lastPathComponent == "claude")
+        let request = PromptBuilder.build(input: "qualsiasi", question: nil, agent: .claudeCode, settings: settings)
+        #expect(target.arguments == ClaudeCodeProvider.arguments(for: request))
+
+        settings.agent = .codex
+        #expect(AgentEnvironment.prewarmTarget(settings: settings, locator: locator) == nil)
     }
 
     @Test func makeProviderBuildsSelectedAgent() throws {

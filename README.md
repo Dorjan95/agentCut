@@ -44,7 +44,7 @@ Dalla barra dei menu → **Impostazioni…** puoi scegliere l'agente predefinito
 
 ## Limiti noti
 
-- Tempo di risposta: circa 6 s con Claude e circa 8 s con Codex, dovuti soprattutto all'avvio della CLI. Claude mostra la risposta mentre la scrive, Codex la mostra tutta alla fine.
+- Tempo di risposta: con Claude circa 1–2 s, perché agentCut tiene un processo `claude` già avviato in background (circa 250 MB di memoria) e ne usa uno nuovo per ogni richiesta. Il primo uso dopo aver cambiato agente, modello o prompt può richiedere qualche secondo in più. Codex impiega circa 8 s e mostra la risposta tutta alla fine.
 - Codex gira con sandbox in sola lettura: non può modificare nulla, ma la CLI non permette di disattivare del tutto i suoi strumenti.
 - Se l'app in primo piano dice di non avere testo selezionato, agentCut usa gli appunti senza provare ⌘C: il fumetto lo segnala con "Dagli appunti: …".
 - Le CLI vengono lanciate senza le tue impostazioni personali di Claude Code (`--setting-sources ""`): niente hook né plugin, così è più veloce.

@@ -14,6 +14,8 @@ final class AppCoordinator {
     private var model: BubbleViewModel?
     private var isCapturing = false
     private var pathResolution: Task<Void, Never>?
+    /// Tiene pronto un processo Claude, così la richiesta non paga l'avvio della CLI.
+    private var runner: PrewarmedRunner?
 
     var onOpenSettings: () -> Void = {}
     var onNeedsOnboarding: () -> Void = {}
@@ -30,7 +32,24 @@ final class AppCoordinator {
             let home = FileManager.default.homeDirectoryForCurrentUser
             extraPath = CLILocator.defaultDirectories(home: home) + shellDirs
             locator = CLILocator(searchDirectories: extraPath)
+            runner = PrewarmedRunner(launcher: ProcessRunner(extraPath: extraPath))
+            prewarm()
         }
+    }
+
+    /// Prepara un processo per le impostazioni attuali; se sono cambiate sostituisce quello vecchio.
+    func prewarm() {
+        guard let runner else { return }
+        if let target = AgentEnvironment.prewarmTarget(settings: settingsStore.load(), locator: locator) {
+            runner.prepare(executable: target.executable, arguments: target.arguments, workingDirectory: AgentEnvironment.workingDirectory)
+        } else {
+            runner.stop()
+        }
+    }
+
+    func shutdown() {
+        closeBubble()
+        runner?.stop()
     }
 
     /// Aspetta la PATH della shell (max ~3 s, solo subito dopo l'avvio) prima di lanciare una CLI.
@@ -60,7 +79,8 @@ final class AppCoordinator {
     func trigger(with capture: Capture) {
         closeBubble()
         let settings = settingsStore.load()
-        let provider = AgentEnvironment.makeProvider(settings: settings, locator: locator, runner: ProcessRunner(extraPath: extraPath))
+        prewarm()
+        let provider = AgentEnvironment.makeProvider(settings: settings, locator: locator, runner: runner ?? ProcessRunner(extraPath: extraPath))
         let model = BubbleViewModel(input: capture.input, settings: settings, provider: provider)
 
         let view = BubbleView(

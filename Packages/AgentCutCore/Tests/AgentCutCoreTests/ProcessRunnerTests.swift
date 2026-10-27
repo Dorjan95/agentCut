@@ -48,6 +48,27 @@ struct ProcessRunnerTests {
         #expect(kill(pid, 0) == -1)
     }
 
+    @Test func launchedProcessWaitsForInput() async throws {
+        let process = runner.launch(executable: URL(fileURLWithPath: "/bin/cat"), arguments: [], workingDirectory: tmp)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(process.isAlive)
+        #expect(try await collect(process.send("x\n", timeout: .seconds(5))) == ["x"])
+    }
+
+    @Test func idleTimeoutStartsAtSend() async throws {
+        // Il tempo passato in attesa prima della richiesta non deve contare come inattività.
+        let process = runner.launch(executable: URL(fileURLWithPath: "/bin/cat"), arguments: [], workingDirectory: tmp)
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(try await collect(process.send("hi\n", timeout: .milliseconds(300))) == ["hi"])
+    }
+
+    @Test func discardTerminatesWaitingProcess() async throws {
+        let process = runner.launch(executable: URL(fileURLWithPath: "/bin/cat"), arguments: [], workingDirectory: tmp)
+        process.discard()
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(!process.isAlive)
+    }
+
     @Test func extraPathIsPrepended() async throws {
         let s = ProcessRunner(extraPath: [URL(fileURLWithPath: "/custom/bin")]).lines(executable: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "echo $PATH"], stdin: "", workingDirectory: tmp, timeout: .seconds(5))
         let out = try await collect(s)

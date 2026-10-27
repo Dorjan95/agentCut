@@ -135,6 +135,10 @@ final class SettingsWindow {
             window.isReleasedWhenClosed = false
             window.contentView = NSHostingView(rootView: SettingsView())
             window.center()
+            // Il processo pronto dipende da agente, modello e prompt: lo si rifà a impostazioni chiuse, non a ogni tasto.
+            NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in
+                MainActor.assumeIsolated { AppCoordinator.shared.prewarm() }
+            }
             self.window = window
         }
         window?.makeKeyAndOrderFront(nil)

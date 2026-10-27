@@ -10,6 +10,8 @@ public protocol AgentProvider: Sendable {
 enum LineOutcome {
     case text(String)
     case fail(String)
+    /// La risposta è completa: si smette di leggere e il processo viene chiuso.
+    case finish
     case ignore
 }
 
@@ -31,8 +33,10 @@ enum ProviderStreaming {
             let task = Task {
                 var yielded = false
                 do {
-                    for try await line in lines {
+                    lines: for try await line in lines {
                         switch handle(line) {
+                        case .finish:
+                            break lines
                         case .text(let text):
                             guard !text.isEmpty else { continue }
                             yielded = true

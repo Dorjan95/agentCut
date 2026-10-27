@@ -2,6 +2,7 @@ import Foundation
 
 public enum ClaudeEvent: Equatable, Sendable {
     case textDelta(String)
+    case messageStop
     case result(isError: Bool, text: String)
 }
 
@@ -17,9 +18,11 @@ public struct ClaudeCodeProvider: AgentProvider {
         self.runner = runner
     }
 
+    /// Dipendono solo da system prompt e modello, non dal testo: così un processo pre-avviato serve qualsiasi richiesta.
     public static func arguments(for request: AgentRequest) -> [String] {
         var args = [
             "-p", "--output-format", "stream-json", "--include-partial-messages", "--verbose",
+            "--input-format", "stream-json",
             "--tools", "", "--strict-mcp-config", "--no-session-persistence", "--setting-sources", "",
             "--system-prompt", request.systemPrompt,
         ]
@@ -27,12 +30,20 @@ public struct ClaudeCodeProvider: AgentProvider {
         return args
     }
 
+    /// Messaggio utente nel formato di `--input-format stream-json`, una riga JSON.
+    static func stdinMessage(_ prompt: String) -> String {
+        let message: [String: Any] = ["type": "user", "message": ["role": "user", "content": prompt]]
+        let data = (try? JSONSerialization.data(withJSONObject: message)) ?? Data()
+        return String(decoding: data, as: UTF8.self) + "\n"
+    }
+
     public static func decode(line: String) -> ClaudeEvent? {
         guard let json = jsonObject(line), let type = json["type"] as? String else { return nil }
         switch type {
         case "stream_event":
-            guard let event = json["event"] as? [String: Any],
-                  let delta = event["delta"] as? [String: Any],
+            guard let event = json["event"] as? [String: Any] else { return nil }
+            if event["type"] as? String == "message_stop" { return .messageStop }
+            guard let delta = event["delta"] as? [String: Any],
                   delta["type"] as? String == "text_delta",
                   let text = delta["text"] as? String
             else { return nil }
@@ -48,7 +59,7 @@ public struct ClaudeCodeProvider: AgentProvider {
         let lines = runner.lines(
             executable: executable,
             arguments: Self.arguments(for: request),
-            stdin: request.userPrompt,
+            stdin: Self.stdinMessage(request.userPrompt),
             workingDirectory: workingDirectory,
             timeout: .seconds(60)
         )
@@ -58,6 +69,9 @@ public struct ClaudeCodeProvider: AgentProvider {
             case .textDelta(let text):
                 sawDelta.set()
                 return .text(text)
+            case .messageStop:
+                // Dopo la risposta la CLI passa secondi a scrivere un riepilogo interno: non serve aspettarlo.
+                return .finish
             case .result(true, let text):
                 return .fail(text)
             case .result(false, let text):
