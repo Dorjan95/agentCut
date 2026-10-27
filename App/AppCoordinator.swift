@@ -38,6 +38,7 @@ final class AppCoordinator {
     }
 
     /// Prepara un processo per le impostazioni attuali; se sono cambiate sostituisce quello vecchio.
+    /// Si chiama all'avvio e alla chiusura delle impostazioni.
     func prewarm() {
         guard let runner else { return }
         if let target = AgentEnvironment.prewarmTarget(settings: settingsStore.load(), locator: locator) {
@@ -79,7 +80,8 @@ final class AppCoordinator {
     func trigger(with capture: Capture) {
         closeBubble()
         let settings = settingsStore.load()
-        prewarm()
+        // Niente prewarm qui: le impostazioni si applicano alla chiusura della finestra, e una richiesta
+        // con un comando diverso parte comunque da zero senza avviare un secondo processo in parallelo.
         let provider = AgentEnvironment.makeProvider(settings: settings, locator: locator, runner: runner ?? ProcessRunner(extraPath: extraPath))
         let model = BubbleViewModel(input: capture.input, settings: settings, provider: provider)
 

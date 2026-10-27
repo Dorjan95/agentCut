@@ -15,6 +15,8 @@ public protocol LaunchedProcessing: AnyObject, Sendable {
     func send(_ stdin: String, timeout: Duration) -> AsyncThrowingStream<String, Error>
     /// Termina un processo che non servirà più.
     func discard()
+    /// Chiamato una volta all'uscita del processo, subito se è già uscito.
+    func onExit(_ handler: @escaping @Sendable () -> Void)
 }
 
 /// Lancia un processo e restituisce le righe di stdout man mano che arrivano.
@@ -62,6 +64,7 @@ public struct ProcessRunner: LineRunning, ProcessLaunching {
             try process.run()
         } catch {
             continuation.finish(throwing: AgentError.processFailed(exitCode: -1, stderr: error.localizedDescription))
+            run.markExited()
             return LaunchedProcess(run: run, stdin: nil, stream: stream, continuation: continuation)
         }
 
@@ -156,18 +159,23 @@ private final class LaunchedProcess: LaunchedProcessing, @unchecked Sendable {
 
         // Timeout di inattività: si azzera a ogni riga ricevuta.
         let run = self.run, continuation = self.continuation
-        Task.detached {
-            while !run.exited {
+        let timeoutTask = Task.detached {
+            while true {
                 let idle = run.idleTime
                 if idle >= timeout {
                     run.markTimedOut()
                     continuation.finish(throwing: AgentError.timedOut)
                     return
                 }
-                try await Task.sleep(for: min(timeout - idle, .milliseconds(250)))
+                try await Task.sleep(for: timeout - idle)
             }
         }
+        run.onExit { timeoutTask.cancel() }
         return stream
+    }
+
+    func onExit(_ handler: @escaping @Sendable () -> Void) {
+        run.onExit(handler)
     }
 
     func discard() {
@@ -185,6 +193,7 @@ private final class RunState: @unchecked Sendable {
     private var lastActivity = ContinuousClock.now
     private var _readDone = false
     private var _exited = false
+    private var exitHandlers: [@Sendable () -> Void] = []
     private var stderrData = Data()
     private var stdoutBuffer = Data()
 
@@ -198,11 +207,24 @@ private final class RunState: @unchecked Sendable {
     var readDone: Bool { lock.withLock { _readDone } }
     var stderr: Data { lock.withLock { stderrData } }
 
-    var exited: Bool { lock.withLock { _exited } }
-    var isRunning: Bool { process.isRunning && !exited }
+    var isRunning: Bool { process.isRunning && !lock.withLock { _exited } }
 
     func markExited() {
-        lock.withLock { _exited = true }
+        let handlers: [@Sendable () -> Void] = lock.withLock {
+            _exited = true
+            defer { exitHandlers = [] }
+            return exitHandlers
+        }
+        handlers.forEach { $0() }
+    }
+
+    /// Chiamato all'uscita del processo, subito se è già uscito.
+    func onExit(_ handler: @escaping @Sendable () -> Void) {
+        let alreadyExited: Bool = lock.withLock {
+            if !_exited { exitHandlers.append(handler) }
+            return _exited
+        }
+        if alreadyExited { handler() }
     }
 
     func markReadDone() {

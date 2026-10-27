@@ -62,6 +62,16 @@ struct ProcessRunnerTests {
         #expect(try await collect(process.send("hi\n", timeout: .milliseconds(300))) == ["hi"])
     }
 
+    @Test func onExitFiresWhenProcessEnds() async throws {
+        let process = runner.launch(executable: URL(fileURLWithPath: "/bin/cat"), arguments: [], workingDirectory: tmp)
+        let (exits, exited) = AsyncStream<Void>.makeStream()
+        process.onExit { exited.yield(); exited.finish() }
+        process.discard()
+        var fired = false
+        for await _ in exits { fired = true }
+        #expect(fired)
+    }
+
     @Test func discardTerminatesWaitingProcess() async throws {
         let process = runner.launch(executable: URL(fileURLWithPath: "/bin/cat"), arguments: [], workingDirectory: tmp)
         process.discard()
