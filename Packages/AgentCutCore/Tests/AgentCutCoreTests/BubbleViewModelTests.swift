@@ -51,7 +51,7 @@ struct BubbleViewModelTests {
 
     @Test func streamsThenDone() async {
         let vm = BubbleViewModel(input: selection, settings: AppSettings(), provider: .success(FakeProvider(["KIND: replace\nLABEL: SQL\n---\n", "SELECT 1;"])))
-        vm.start()
+        vm.submitQuestion()
         await waitUntilSettled(vm)
         #expect(vm.state == .done(ParsedResponse(kind: .replace, label: "SQL", body: "SELECT 1;", headerComplete: true)))
         #expect(vm.primaryAction == .replace)
@@ -60,7 +60,7 @@ struct BubbleViewModelTests {
 
     @Test func answerMakesCopyPrimary() async {
         let vm = BubbleViewModel(input: selection, settings: AppSettings(), provider: .success(FakeProvider(["KIND: answer\n---\nSpiegazione"])))
-        vm.start()
+        vm.submitQuestion()
         await waitUntilSettled(vm)
         #expect(vm.primaryAction == .copy)
         #expect(!vm.canReplace)
@@ -68,11 +68,30 @@ struct BubbleViewModelTests {
 
     @Test func unclearAsksQuestion() async {
         let vm = BubbleViewModel(input: selection, settings: AppSettings(), provider: .success(FakeProvider(["KIND: unclear\n---\nCosa vuoi?"])))
-        vm.start()
+        vm.submitQuestion()
         await waitUntilSettled(vm)
         guard case .askingQuestion(let previous) = vm.state else { Issue.record("state \(vm.state)"); return }
         #expect(previous?.body == "Cosa vuoi?")
         #expect(vm.primaryAction == nil)
+    }
+
+    @Test func startWaitsForQuestion() {
+        // Il fumetto si apre sul testo catturato: l'agente parte solo all'invio.
+        let provider = FakeProvider(["x"])
+        let vm = BubbleViewModel(input: selection, settings: AppSettings(), provider: .success(provider))
+        vm.start()
+        #expect(vm.state == .askingQuestion(previous: nil))
+        #expect(provider.calls == 0)
+    }
+
+    @Test func emptySubmitRunsAutomaticFix() async {
+        let provider = FakeProvider(["KIND: replace\n---\nSELECT 1"])
+        let vm = BubbleViewModel(input: selection, settings: AppSettings(), provider: .success(provider))
+        vm.start()
+        vm.submitQuestion()
+        await waitUntilSettled(vm)
+        #expect(provider.calls == 1)
+        #expect(provider.lastRequest?.userPrompt.contains("Domanda:") == false)
     }
 
     @Test func blankInputAsksWithoutCallingProvider() async {
@@ -97,7 +116,7 @@ struct BubbleViewModelTests {
             }
         }
         let vm = BubbleViewModel(input: selection, settings: AppSettings(), provider: .success(Failing()))
-        vm.start()
+        vm.submitQuestion()
         await waitUntilSettled(vm)
         #expect(vm.state == .failed(.timedOut))
     }
@@ -115,7 +134,7 @@ struct BubbleViewModelTests {
     @Test func cancelStopsStreaming() async {
         let provider = FakeProvider(["KIND: replace\n---\nSEL", "ECT"], hangAfterFirst: true)
         let vm = BubbleViewModel(input: selection, settings: AppSettings(), provider: .success(provider))
-        vm.start()
+        vm.submitQuestion()
         try? await Task.sleep(for: .milliseconds(50))
         vm.cancel()
         for _ in 0..<50 where !provider.terminated { try? await Task.sleep(for: .milliseconds(10)) }

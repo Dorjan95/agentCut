@@ -34,8 +34,8 @@ agentCut chiede il permesso **Accessibilità** (Impostazioni di Sistema → Priv
 
 ## Uso
 
-- **⌃⌥Space** (Ctrl+Option+Spazio) su un testo selezionato apre il fumetto. Se non c'è selezione, usa il testo negli appunti e ne mostra un'anteprima.
-- **⏎** esegue l'azione principale: *Sostituisci* quando la risposta è un testo corretto, *Copia* quando è una spiegazione. **⌘⇧C** copia sempre tutta la risposta, mentre ⌘C copia solo la parte che hai selezionato nel fumetto.
+- **⌃⌥Space** (Ctrl+Option+Spazio) su un testo selezionato apre il fumetto con il testo e un campo per la domanda. Se non c'è selezione, usa il testo negli appunti. L'agente parte solo quando premi ⏎: con una domanda risponde a quella, a campo vuoto corregge il testo da solo.
+- Sulla risposta, **⏎** esegue l'azione principale: *Sostituisci* quando la risposta è un testo corretto, *Copia* quando è una spiegazione. **⌘⇧C** copia sempre tutta la risposta, mentre ⌘C copia solo la parte che hai selezionato nel fumetto.
 - **Chiedi altro…** permette di scrivere una domanda su quel testo.
 - **Esc** chiude il fumetto e interrompe la richiesta.
 - **Tasto destro → Servizi → Chiedi ad agentCut** fa la stessa cosa dal menu contestuale. Se la voce non c'è, abilitala in Impostazioni di Sistema → Tastiera → Scorciatoie da tastiera → Servizi → Testo.

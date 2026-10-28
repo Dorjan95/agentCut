@@ -52,10 +52,19 @@ public final class BubbleViewModel {
 
     public var canReplace: Bool { primaryAction == .replace }
 
+    /// Apre il fumetto sul testo catturato senza chiamare l'agente: l'utente scrive la domanda,
+    /// oppure invia a vuoto per la correzione automatica.
     public func start() {
-        run(question: nil)
+        cancel()
+        if case .failure(let error) = provider {
+            // Inutile far scrivere la domanda se l'agente non si può avviare.
+            state = .failed(error)
+            return
+        }
+        state = .askingQuestion(previous: nil)
     }
 
+    /// Invia la domanda scritta; a vuoto chiede la correzione automatica del testo.
     public func submitQuestion() {
         let question = questionText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty || !isBlankInput else { return }

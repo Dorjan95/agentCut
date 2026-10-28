@@ -13,7 +13,7 @@ struct BubbleView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             content
-            if let preview = model.inputPreview {
+            if let preview = model.inputPreview, !isComposing {
                 Text("Dagli appunti: \(preview)")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
@@ -25,6 +25,12 @@ struct BubbleView: View {
         .background(VisualEffectBackground())
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .onExitCommand(perform: onClose)
+    }
+
+    /// Mentre si scrive la domanda il testo catturato è già mostrato per intero.
+    private var isComposing: Bool {
+        if case .askingQuestion = model.state { return true }
+        return false
     }
 
     @ViewBuilder
@@ -56,7 +62,7 @@ struct BubbleView: View {
                     .background(Capsule().fill(Color.accentColor.opacity(0.15)))
                     .foregroundStyle(Color.accentColor)
             }
-            BodyText(text: response.body, monospaced: response.kind == .replace)
+            BodyText(text: response.body, monospaced: response.kind == .replace, minHeight: 120, maxHeight: 420)
             if let note = response.note {
                 Text(note).font(.caption).foregroundStyle(.secondary)
             }
@@ -88,10 +94,28 @@ struct BubbleView: View {
             if let previous, previous.kind == .unclear, !previous.body.isEmpty {
                 Text(previous.body).font(.callout)
             }
-            TextField("Fai una domanda su questo testo…", text: $model.questionText)
+            if !model.input.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(model.input.source == .clipboard ? "Dagli appunti" : "Testo selezionato")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                BodyText(text: model.input.text, monospaced: true, maxHeight: 110)
+            }
+            TextField("Cosa vuoi fare con questo testo?", text: $model.questionText, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
+                .lineLimit(1...5)
                 .focused($questionFocused)
                 .onSubmit { model.submitQuestion() }
+            HStack {
+                Text(model.questionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                     ? "⏎ senza domanda: correzione automatica"
+                     : "⏎ per inviare")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                Button("Invia") { model.submitQuestion() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
         }
         .onAppear { questionFocused = true }
     }
@@ -123,10 +147,12 @@ private struct VisualEffectBackground: NSViewRepresentable {
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
-/// Corpo selezionabile che cresce col contenuto fino a 300 pt, poi scorre.
+/// Corpo selezionabile che cresce col contenuto tra `minHeight` e `maxHeight`, poi scorre.
 private struct BodyText: View {
     let text: String
     let monospaced: Bool
+    var minHeight: CGFloat = 0
+    var maxHeight: CGFloat
     @State private var height: CGFloat = 20
 
     var body: some View {
@@ -140,7 +166,7 @@ private struct BodyText: View {
                     Color.clear.preference(key: HeightKey.self, value: proxy.size.height)
                 })
         }
-        .frame(height: min(height, 300))
+        .frame(height: min(max(height, minHeight), maxHeight))
         .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.05)))
         .onPreferenceChange(HeightKey.self) { height = $0 }
     }
